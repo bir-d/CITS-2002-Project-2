@@ -300,7 +300,7 @@ extern	char	*strdup(const char *s);
 #define	SHA2_DIGEST_LEN_BYTES		32
 #define	SHA2_DIGEST_LEN_STR		64
 
-char *strSHA2(char *filename)
+int SHA2(const char *filename, unsigned char *output_digest)
 {
 #if	defined(O_BINARY)
     int	fd = open(filename, O_RDONLY | O_BINARY, 0);
@@ -310,7 +310,6 @@ char *strSHA2(char *filename)
 
     if(fd >= 0) {
 	sha256_context	ctx;
-	uint8		digest[SHA2_DIGEST_LEN_BYTES];
 	uint8		buf[ 1<<10 ];
 	int		got;
 
@@ -318,19 +317,10 @@ char *strSHA2(char *filename)
 	while((got = read(fd, buf, sizeof(buf))) > 0) {
 	    sha256_update(&ctx, buf, got);
 	}
-	sha256_finish(&ctx, digest);
+	sha256_finish(&ctx, output_digest);
 
 	close(fd);
-
-	static char	str[SHA2_DIGEST_LEN_STR + 1];
-	char		*s = str;
-
-	for(int i=0 ; i<SHA2_DIGEST_LEN_BYTES ; i++) {
-	    sprintf(s, "%02x", digest[i]);
-	    s += 2;
-	}
-	*s	= '\0';
-	return strdup(str);
+	return 0;
     }
-    return NULL;
+    return 1;
 }
