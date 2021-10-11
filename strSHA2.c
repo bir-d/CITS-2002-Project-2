@@ -300,6 +300,8 @@ extern	char	*strdup(const char *s);
 #define	SHA2_DIGEST_LEN_BYTES		32
 #define	SHA2_DIGEST_LEN_STR		64
 
+// Modify function to return status and output into a parameter pointer,
+// we do not need the hex string.
 int SHA2(const char *filename, unsigned char *output_digest)
 {
 #if	defined(O_BINARY)
@@ -309,18 +311,18 @@ int SHA2(const char *filename, unsigned char *output_digest)
 #endif
 
     if(fd >= 0) {
-	sha256_context	ctx;
-	uint8		buf[ 1<<10 ];
-	int		got;
+		sha256_context	ctx;
+		uint8		buf[ 1<<10 ];
+		int		got;
 
-	sha256_starts(&ctx);
-	while((got = read(fd, buf, sizeof(buf))) > 0) {
-	    sha256_update(&ctx, buf, got);
-	}
-	sha256_finish(&ctx, output_digest);
+		sha256_starts(&ctx);
+		while((got = read(fd, buf, sizeof(buf))) > 0) {
+			sha256_update(&ctx, buf, got);
+		}
+		sha256_finish(&ctx, output_digest);
 
-	close(fd);
-	return 0;
+		close(fd);
+		return 0;
     }
     return 1;
 }
