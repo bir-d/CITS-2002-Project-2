@@ -379,10 +379,12 @@ int main(int argc, char* argv[]) {
 
 	if (directory_list_length == 0) {
 		fprintf(stderr, "No directories were specified\n");
+		exit(EXIT_FAILURE);
 	}
 
 	if (!advanced && directory_list_length > 1) {
 		fprintf(stderr, "Multiple directories can only be specified in advanced mode (specified with -A)\n");
+		exit(EXIT_FAILURE);
 	}
 
 	for (int i = 0; i < directory_list_length; i++) {
