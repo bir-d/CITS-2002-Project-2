@@ -58,9 +58,9 @@ void hashmap_init(duplicates_hashmap* hashmap, int initial_length) {
 
 unsigned int hashmap_index_from_hash(duplicates_hashmap* map, unsigned char* hash) {
 	unsigned int hash_int = 0;
-	for (int i = 0; i < (int)sizeof(hash_int) && i < HASH_DIGEST_SZ; i++) {
-		hash_int |= hash[i];
+	for (int i = 0; i < HASH_DIGEST_SZ; i++) {
 		hash_int <<= 8;
+		hash_int |= hash[i];
 	}
 
 	return hash_int % map->buckets_length;
@@ -76,23 +76,24 @@ void hashmap_insert(duplicates_hashmap* map, unsigned char* hash, file_list* nod
 		current_bucket->files = current_bucket->files_tail = node;
 		current_bucket->next = NULL;
 		return;
-	} else {
-		while (true) {
-			if (memcmp(hash, current_bucket->original_hash, HASH_DIGEST_SZ) == 0) {
-				break;
-			}
-			if (current_bucket->next == NULL) {
-				current_bucket->next = malloc(sizeof(hashmap_entry));
-				current_bucket = current_bucket->next;
-				break;
-			}
-
-			current_bucket = current_bucket->next;
-		}
 	}
 
-	current_bucket->files_tail->next = node;
-	current_bucket->files_tail = current_bucket->files_tail->next;
+	while (true) {
+		if (memcmp(hash, current_bucket->original_hash, HASH_DIGEST_SZ) == 0) {
+			break;
+		}
+		if (current_bucket->next == NULL) {
+			current_bucket = current_bucket->next = malloc(sizeof(hashmap_entry));
+			memcpy(current_bucket->original_hash, hash, HASH_DIGEST_SZ);
+			current_bucket->files = current_bucket->files_tail = node;
+			current_bucket->next = NULL;
+			return;
+		}
+
+		current_bucket = current_bucket->next;
+	}
+
+	current_bucket->files_tail = current_bucket->files_tail->next = node;
 }
 
 typedef enum file_type_t {
@@ -140,9 +141,9 @@ void recurse_directory(const char* basepath, bool ignore_dotfiles, file_handler 
 			continue;
 		}
 
-		size_t full_path_len = strlen(basepath) + strlen(name);
+		size_t full_path_len = strlen(basepath) + 1 + strlen(name);
 		char* full_path = malloc(full_path_len + 1);
-		snprintf(full_path, full_path_len, "%s/%s", basepath, name);
+		snprintf(full_path, full_path_len + 1, "%s/%s", basepath, name);
 
 		if (!is_readable(full_path)) {
 			free(full_path);
@@ -289,7 +290,7 @@ void _search_all_callback(const char* filename, duplicates_hashmap* map) {
 
 void search_all(duplicates_hashmap* output, bool ignore_dotfiles, char** directory_list, int directory_list_length) {
 	for (int i = 0; i < directory_list_length; i++) {
-		recurse_directory(directory_list[i], ignore_dotfiles, (file_handler)_search_all_callback, &output);
+		recurse_directory(directory_list[i], ignore_dotfiles, (file_handler)_search_all_callback, output);
 	}
 }
 
@@ -299,6 +300,7 @@ void deduplicate_file_list(file_list* head) {
 	while (head != NULL) {
 		unlink(head->path);
 		link(head->path, target_path);
+		head = head->next;
 	}
 }
 
@@ -310,15 +312,25 @@ unsigned char* parse_hexstring(const char* hexstring, size_t expected_length) {
 	if (strlen(hexstring) != expected_length * 2) {
 		return NULL;
 	}
-	unsigned char* result = malloc(expected_length);
+	unsigned char* result = calloc(expected_length, sizeof(unsigned char));
 
-	unsigned char parsed_byte;
 	for (int i = 0; i < expected_length; i++) {
-		if (sscanf(&hexstring[i * 2], "%2hhx", &parsed_byte) == EOF) {
-			return NULL;
-		}
+		for (int j = 0; j < 2; j++) {
+			char nibble = 0;
+			char digit = hexstring[(i * 2) + j];
+			if (digit >= '0' && digit <= '9') {
+				nibble = digit - '0';
+			} else if (digit >= 'a' && digit <= 'f') {
+				nibble = digit - 'a' + 10;
+			} else if (digit >= 'A' && digit <= 'F') {
+				nibble = digit - 'A' + 10;
+			} else {
+				free(result);
+				return NULL;
+			}
 
-		result[i] = parsed_byte;
+			result[i] = (result[i] << (j ? 4 : 0)) | nibble;
+		}
 	}
 
 	return result;
@@ -334,7 +346,7 @@ int main(int argc, char* argv[]) {
 	char* filename = NULL;
 	unsigned char* hash = NULL;
 	int opt;
-	while ((opt = getopt(argc, argv, "aAf::h::lmq")) != -1) {
+	while ((opt = getopt(argc, argv, "aAf:h:lmq")) != -1) {
 		switch (opt) {
 			case 'a':
 				ignore_dotfiles = false;
@@ -362,7 +374,7 @@ int main(int argc, char* argv[]) {
 			case 'h':
 				if ((hash = parse_hexstring(optarg, HASH_DIGEST_SZ)) == NULL) {
 					fprintf(stderr, "-h parameter must be a valid SHA256 hash (64 hex digits)\n");
-					exit(EXIT_FAILURE);
+					return EXIT_FAILURE;
 				}
 				print_stats = false;
 				break;
@@ -371,7 +383,7 @@ int main(int argc, char* argv[]) {
 
 	if (modify && !advanced) {
 		fprintf(stderr, "-m can only be used in advanced mode (specified with -A)\n");
-		exit(EXIT_FAILURE);
+		return EXIT_FAILURE;
 	}
 
 	char** directory_list = &argv[optind];
@@ -379,23 +391,23 @@ int main(int argc, char* argv[]) {
 
 	if (directory_list_length == 0) {
 		fprintf(stderr, "No directories were specified\n");
-		exit(EXIT_FAILURE);
+		return EXIT_FAILURE;
 	}
 
 	if (!advanced && directory_list_length > 1) {
 		fprintf(stderr, "Multiple directories can only be specified in advanced mode (specified with -A)\n");
-		exit(EXIT_FAILURE);
+		return EXIT_FAILURE;
 	}
 
 	for (int i = 0; i < directory_list_length; i++) {
 		if (!is_readable(directory_list[i])) {
 			fprintf(stderr, "Specified directory %s is not readable (does it exist?)\n", directory_list[i]);
-			exit(EXIT_FAILURE);
+			return EXIT_FAILURE;
 		}
 		
 		if (get_file_type(directory_list[i]) != FT_DIRECTORY) {
 			fprintf(stderr, "Specified directory %s is not a directory\n", directory_list[i]);
-			exit(EXIT_FAILURE);
+			return EXIT_FAILURE;
 		}
 	}
 
@@ -408,18 +420,19 @@ int main(int argc, char* argv[]) {
 		}
 		if (!quiet) {
 			print_file_list(result, "\n");
+			printf("\n");
 		}
 		if (modify) {
 			deduplicate_file_list(result);
 		}
 		if (quiet && result != NULL) {
-			exit(EXIT_FAILURE);
+			return EXIT_FAILURE;
 		}
-		exit(EXIT_SUCCESS);
+		return EXIT_SUCCESS;
 	}
 
 	duplicates_hashmap map;
-	hashmap_init(&map, 1024); // A "reasonable" number off the top of my head.
+	hashmap_init(&map, 1024); // A "reasonable" number to work with.
 	search_all(&map, ignore_dotfiles, directory_list, directory_list_length);
 	
 	if (quiet) {
@@ -438,14 +451,14 @@ int main(int argc, char* argv[]) {
 			}
 		}
 
-		exit(duplicates_found ? EXIT_FAILURE : EXIT_SUCCESS);
+		return duplicates_found ? EXIT_FAILURE : EXIT_SUCCESS;
 	}
 
 	if (print_stats) {
-		unsigned int no_files;
-		unsigned int total_size;
-		unsigned int no_unique_files;
-		unsigned int minimum_size;
+		unsigned int no_files = 0;
+		unsigned int total_size = 0;
+		unsigned int no_unique_files = 0;
+		unsigned int minimum_size = 0;
 		for (unsigned int i = 0; i < map.buckets_length; i++) {
 			if (map.buckets[i] == NULL) {
 				continue;
@@ -477,6 +490,8 @@ int main(int argc, char* argv[]) {
 					} else {
 						total_size += current_file->size;
 					}
+
+					current_file = current_file->next;
 				}
 
 				current_bucket = current_bucket->next;
