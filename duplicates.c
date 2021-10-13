@@ -51,9 +51,9 @@ typedef struct duplicates_hashmap_t {
 //     ]
 // }
 
-void hashmap_init(duplicates_hashmap* hashmap, int initial_length) {
-	hashmap->buckets_length = initial_length;
-	hashmap->buckets = malloc(sizeof(hashmap_entry*) * initial_length);
+void hashmap_init(duplicates_hashmap* hashmap, int length) {
+	hashmap->buckets_length = length;
+	hashmap->buckets = calloc(length, sizeof(hashmap_entry*));
 }
 
 unsigned int hashmap_index_from_hash(duplicates_hashmap* map, unsigned char* hash) {
@@ -212,6 +212,22 @@ void free_file_list(file_list* head) {
 	}
 }
 
+void hashmap_free(duplicates_hashmap* map) {
+	for (int i = 0; i < map->buckets_length; i++) {
+		if (map->buckets[i] == NULL) {
+			continue;
+		}
+
+		free_file_list(map->buckets[i]->files);
+		free(map->buckets[i]);
+	}
+
+	free(map->buckets);
+
+	map->buckets_length = 0;
+	map->buckets = NULL;
+}
+
 typedef struct search_by_hash_or_filename_state_t {
 	const unsigned char* target_digest;
 	const char* target_filepath; // Used only in the context of search_by_filename
@@ -273,6 +289,7 @@ file_list* search_by_filename(const char* filename, bool ignore_dotfiles, char**
 		recurse_directory(directory_list[i], ignore_dotfiles, (file_handler)_search_by_hash_or_filename_callback, &state);
 	}
 
+	free(digest);
 	return state.head;
 }
 
@@ -286,6 +303,7 @@ void _search_all_callback(const char* filename, duplicates_hashmap* map) {
 
 	file_list* node = construct_file_list_node(filename);
 	hashmap_insert(map, digest, node);
+	free(digest);
 }
 
 void search_all(duplicates_hashmap* output, bool ignore_dotfiles, char** directory_list, int directory_list_length) {
@@ -418,6 +436,8 @@ int main(int argc, char* argv[]) {
 		} else if (hash != NULL) {
 			result = search_by_hash(hash, ignore_dotfiles, directory_list, directory_list_length);
 		}
+		
+		bool files_found = result != NULL;
 		if (!quiet) {
 			print_file_list(result, "\n");
 			printf("\n");
@@ -425,9 +445,12 @@ int main(int argc, char* argv[]) {
 		if (modify) {
 			deduplicate_file_list(result);
 		}
-		if (quiet && result != NULL) {
+		if (quiet && files_found) {
+			free_file_list(result);
 			return EXIT_FAILURE;
 		}
+		
+		free_file_list(result);
 		return EXIT_SUCCESS;
 	}
 
@@ -451,6 +474,7 @@ int main(int argc, char* argv[]) {
 			}
 		}
 
+		hashmap_free(&map);
 		return duplicates_found ? EXIT_FAILURE : EXIT_SUCCESS;
 	}
 
@@ -528,4 +552,7 @@ int main(int argc, char* argv[]) {
 			}
 		}
 	}
+	
+	hashmap_free(&map);
+	return EXIT_SUCCESS;
 }
