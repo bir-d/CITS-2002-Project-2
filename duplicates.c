@@ -179,6 +179,7 @@ file_list* construct_file_list_node(const char* filepath) {
 	node->path = strdup(filepath);
 	node->inode_number = file_stat.st_ino;
 	node->size = file_stat.st_size;
+	node->next = NULL;
 
 	return node;
 }
