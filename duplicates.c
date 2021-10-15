@@ -4,356 +4,19 @@
 
 //  Project must be compiled with `make`
 
-#define _POSIX_C_SOURCE 200809L
-
-#include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <dirent.h>
 #include <unistd.h>
 
-#define HASH_DIGEST_SZ 32
-
-typedef struct file_list_node_t {
-	struct file_list_node_t* next;
-	char* path;
-	// A hard link is defined by pointing to the same inode number.
-	// We'll need this to count sizes when hard-links are considered.
-	ino_t inode_number;
-	size_t size;
-} file_list;
-
-typedef struct hashmap_entry_t {
-	unsigned char original_hash[HASH_DIGEST_SZ];
-	file_list* files;
-	file_list* files_tail;
-	struct hashmap_entry_t* next; // Here, we use separate chaining to resolve collisions
-	// Open addressing, such as Robin Hood hashing, would require some implementation of dynamic resizing
-	// which would involve a relatively complex implementation
-} hashmap_entry;
-
-typedef struct duplicates_hashmap_t {
-	unsigned int buckets_length;
-	hashmap_entry** buckets;
-} duplicates_hashmap;
-
-// Put together, the above structures is analogous to the following:
-// map[unique_data_hash_digest] = {
-//     filepaths: [
-//         {
-//             path,
-//             inode_number,
-//             size
-//         }
-//     ]
-// }
-
-void hashmap_init(duplicates_hashmap* hashmap, int length) {
-	hashmap->buckets_length = length;
-	hashmap->buckets = calloc(length, sizeof(hashmap_entry*));
-}
-
-unsigned int hashmap_index_from_hash(duplicates_hashmap* map, unsigned char* hash) {
-	unsigned int hash_int = 0;
-	for (int i = 0; i < HASH_DIGEST_SZ; i++) {
-		hash_int <<= 8;
-		hash_int |= hash[i];
-	}
-
-	return hash_int % map->buckets_length;
-}
-
-void hashmap_insert(duplicates_hashmap* map, unsigned char* hash, file_list* node) {
-	unsigned int index = hashmap_index_from_hash(map, hash);
-
-	hashmap_entry* current_bucket = map->buckets[index];
-	if (current_bucket == NULL) { // base case, this bucket is not occupied
-		current_bucket = map->buckets[index] = malloc(sizeof(hashmap_entry));
-		memcpy(current_bucket->original_hash, hash, HASH_DIGEST_SZ);
-		current_bucket->files = current_bucket->files_tail = node;
-		current_bucket->next = NULL;
-		return;
-	}
-
-	while (true) {
-		if (memcmp(hash, current_bucket->original_hash, HASH_DIGEST_SZ) == 0) {
-			break;
-		}
-		if (current_bucket->next == NULL) {
-			current_bucket = current_bucket->next = malloc(sizeof(hashmap_entry));
-			memcpy(current_bucket->original_hash, hash, HASH_DIGEST_SZ);
-			current_bucket->files = current_bucket->files_tail = node;
-			current_bucket->next = NULL;
-			return;
-		}
-
-		current_bucket = current_bucket->next;
-	}
-
-	current_bucket->files_tail = current_bucket->files_tail->next = node;
-}
-
-typedef enum file_type_t {
-	FT_UNKNOWN,
-	FT_REGULAR,
-	FT_DIRECTORY,
-} file_type;
-
-file_type get_file_type(const char* path) {
-	struct stat file_stat;
-	stat(path, &file_stat);
-	mode_t file_mode = file_stat.st_mode;
-
-	if (S_ISREG(file_mode)) {
-		return FT_REGULAR;
-	}
-	if (S_ISDIR(file_mode)) {
-		return FT_DIRECTORY;
-	}
-	return FT_UNKNOWN;
-}
-
-bool is_readable(const char* path) {
-	return access(path, R_OK | F_OK) == 0;
-}
-
-typedef void (*file_handler)(const char* filepath, void* parameters);
-
-void recurse_directory(const char* basepath, bool ignore_dotfiles, file_handler callback_func, void* parameters) {
-	DIR* directory = opendir(basepath);	
-	if (directory == NULL) {
-		// We have validated specified directories, passed in the command-line,
-		// we can ignore descendants we don't have access to for robustness.
-		return;
-	}
-
-	struct dirent* cur_entry;
-	while ((cur_entry = readdir(directory)) != NULL) {
-		char* name = cur_entry->d_name;
-		
-		if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) {
-			continue;
-		}
-		if (ignore_dotfiles && name[0] == '.') {
-			continue;
-		}
-
-		size_t full_path_len = strlen(basepath) + 1 + strlen(name);
-		char* full_path = malloc(full_path_len + 1);
-		snprintf(full_path, full_path_len + 1, "%s/%s", basepath, name);
-
-		if (!is_readable(full_path)) {
-			free(full_path);
-			continue;
-		}
-
-		switch (get_file_type(full_path)) {
-			case FT_REGULAR:
-				callback_func(full_path, parameters);
-				break;
-			case FT_DIRECTORY:
-				recurse_directory(full_path, ignore_dotfiles, callback_func, parameters);
-				break;
-			case FT_UNKNOWN:
-			default:
-				break;
-		}
-		free(full_path);
-	}
-
-	closedir(directory);
-}
-
-
-
-extern int SHA2(const char *filename, unsigned char *output_digest); 
-
-file_list* construct_file_list_node(const char* filepath) {
-	file_list* node = malloc(sizeof(file_list));
-
-	struct stat file_stat;
-	stat(filepath, &file_stat);
-	node->path = strdup(filepath);
-	node->inode_number = file_stat.st_ino;
-	node->size = file_stat.st_size;
-	node->next = NULL;
-
-	return node;
-}
-
-void print_file_list(file_list* head, const char* separator) {
-	while (head != NULL) {
-		if (head->path != NULL) {
-			printf("%s", head->path);
-		}
-
-		if (head->next != NULL) {
-			printf("%s", separator);
-		}
-
-		head = head->next;
-	}
-}
-
-
-void free_file_list(file_list* head) {
-	file_list* tmp;
-	while (head != NULL) {
-		tmp = head;
-
-		if (head->path != NULL) {
-			free(head->path);
-		}
-
-		head = head->next;
-		free(tmp);
-	}
-}
-
-void hashmap_free(duplicates_hashmap* map) {
-	for (int i = 0; i < map->buckets_length; i++) {
-		if (map->buckets[i] == NULL) {
-			continue;
-		}
-
-		free_file_list(map->buckets[i]->files);
-		free(map->buckets[i]);
-	}
-
-	free(map->buckets);
-
-	map->buckets_length = 0;
-	map->buckets = NULL;
-}
-
-typedef struct search_by_hash_or_filename_state_t {
-	const unsigned char* target_digest;
-	const char* target_filepath; // Used only in the context of search_by_filename
-	file_list* head;
-	file_list* tail;
-} search_state;
-
-void _search_by_hash_or_filename_callback(const char* filepath, search_state* parameters) {
-	search_state* state = (search_state*)parameters;
-	unsigned char file_digest[HASH_DIGEST_SZ];
-	SHA2(filepath, file_digest);
-
-	if (memcmp(file_digest, state->target_digest, HASH_DIGEST_SZ) != 0) {
-		return;
-	}
-
-	if (state->target_filepath != NULL && strcmp(filepath, state->target_filepath) == 0) {
-		return;
-	}
-
-	file_list* next = construct_file_list_node(filepath);
-
-	if (state->head == NULL) {
-		state->head = next;
-	} else {
-		state->tail->next = next;
-	}
-	state->tail = next;
-}
-
-file_list* search_by_hash(const unsigned char* digest, bool ignore_dotfiles, char** directory_list, int directory_list_length) {
-	search_state state = {
-		.target_digest = digest,
-		.target_filepath = NULL,
-		.head = NULL,
-		.tail = NULL
-	};
-	for (int i = 0; i < directory_list_length; i++) {
-		recurse_directory(directory_list[i], ignore_dotfiles, (file_handler)_search_by_hash_or_filename_callback, &state);
-	}
-	return state.head;
-}
-
-file_list* search_by_filename(const char* filename, bool ignore_dotfiles, char** directory_list, int directory_list_length) {
-	unsigned char* digest = malloc(HASH_DIGEST_SZ);
-	
-	if (SHA2(filename, digest)) {
-		fprintf(stderr, "Cannot open specified filename\n");
-		exit(EXIT_FAILURE);
-	}
-	
-	search_state state = {
-		.target_digest = digest,
-		.target_filepath = filename,
-		.head = NULL,
-		.tail = NULL
-	};
-	for (int i = 0; i < directory_list_length; i++) {
-		recurse_directory(directory_list[i], ignore_dotfiles, (file_handler)_search_by_hash_or_filename_callback, &state);
-	}
-
-	free(digest);
-	return state.head;
-}
-
-void _search_all_callback(const char* filename, duplicates_hashmap* map) {
-	unsigned char* digest = malloc(HASH_DIGEST_SZ);
-	
-	if (SHA2(filename, digest)) {
-		fprintf(stderr, "Cannot open specified filename\n");
-		exit(EXIT_FAILURE);
-	}
-
-	file_list* node = construct_file_list_node(filename);
-	hashmap_insert(map, digest, node);
-	free(digest);
-}
-
-void search_all(duplicates_hashmap* output, bool ignore_dotfiles, char** directory_list, int directory_list_length) {
-	for (int i = 0; i < directory_list_length; i++) {
-		recurse_directory(directory_list[i], ignore_dotfiles, (file_handler)_search_all_callback, output);
-	}
-}
-
-void deduplicate_file_list(file_list* head) {
-	const char* target_path = head->path;
-	head = head->next;
-	while (head != NULL) {
-		unlink(head->path);
-		link(head->path, target_path);
-		head = head->next;
-	}
-}
+#include "const.h"
+#include "util.h"
+#include "list.h"
+#include "hashmap.h"
+#include "file_recurse.h"
+#include "search.h"
 
 extern char *optarg;
 extern int optind, opterr, optopt;
-
-unsigned char* parse_hexstring(const char* hexstring, size_t expected_length) {
-	// One byte -> two hex
-	if (strlen(hexstring) != expected_length * 2) {
-		return NULL;
-	}
-	unsigned char* result = calloc(expected_length, sizeof(unsigned char));
-
-	for (int i = 0; i < expected_length; i++) {
-		for (int j = 0; j < 2; j++) {
-			char nibble = 0;
-			char digit = hexstring[(i * 2) + j];
-			if (digit >= '0' && digit <= '9') {
-				nibble = digit - '0';
-			} else if (digit >= 'a' && digit <= 'f') {
-				nibble = digit - 'a' + 10;
-			} else if (digit >= 'A' && digit <= 'F') {
-				nibble = digit - 'A' + 10;
-			} else {
-				free(result);
-				return NULL;
-			}
-
-			result[i] = (result[i] << (j ? 4 : 0)) | nibble;
-		}
-	}
-
-	return result;
-}
 
 int main(int argc, char* argv[]) {
 	bool print_stats = true;
@@ -440,18 +103,18 @@ int main(int argc, char* argv[]) {
 		
 		bool files_found = result != NULL;
 		if (!quiet) {
-			print_file_list(result, "\n");
+			file_list_print(result, "\n");
 			printf("\n");
 		}
 		if (modify) {
-			deduplicate_file_list(result);
+			file_list_deduplicate(result);
 		}
 		if (quiet && files_found) {
-			free_file_list(result);
+			file_list_free(result);
 			return EXIT_FAILURE;
 		}
 		
-		free_file_list(result);
+		file_list_free(result);
 		return EXIT_SUCCESS;
 	}
 
@@ -470,7 +133,7 @@ int main(int argc, char* argv[]) {
 			if (current->files->next != NULL) {
 				duplicates_found = true;
 				if (modify) {
-					deduplicate_file_list(current->files);
+					file_list_deduplicate(current->files);
 				}
 			}
 		}
@@ -534,7 +197,7 @@ int main(int argc, char* argv[]) {
 
 			hashmap_entry* current = map.buckets[i];
 			while (current != NULL) {
-				print_file_list(current->files, "\t");
+				file_list_print(current->files, "\t");
 				printf("\n");
 				current = current->next;
 			}
@@ -549,7 +212,7 @@ int main(int argc, char* argv[]) {
 		hashmap_entry* current = map.buckets[i];
 		if (current->files->next != NULL) {
 			if (modify) {
-				deduplicate_file_list(current->files);
+				file_list_deduplicate(current->files);
 			}
 		}
 	}
