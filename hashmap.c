@@ -22,31 +22,26 @@ unsigned int _hashmap_index_from_hash(duplicates_hashmap* map, unsigned char* ha
 void hashmap_insert(duplicates_hashmap* map, unsigned char* hash, file_list* node) {
 	unsigned int index = _hashmap_index_from_hash(map, hash);
 
-	hashmap_entry* current_bucket = map->buckets[index];
-	if (current_bucket == NULL) { // base case, this bucket is not occupied
-		current_bucket = map->buckets[index] = malloc(sizeof(hashmap_entry));
-		memcpy(current_bucket->original_hash, hash, HASH_DIGEST_SZ);
-		current_bucket->files = current_bucket->files_tail = node;
-		current_bucket->next = NULL;
+	hashmap_entry** current_bucket_ptr = &map->buckets[index];
+	while (*current_bucket_ptr != NULL) {
+		if (memcmp(hash, (*current_bucket_ptr)->original_hash, HASH_DIGEST_SZ) == 0) {
+			break;
+		}
+
+		current_bucket_ptr = &(*current_bucket_ptr)->next;
+	}
+
+	hashmap_entry* current_bucket = *current_bucket_ptr;
+	if (current_bucket != NULL) { // Same hash found, append to file list
+		current_bucket->files_tail = current_bucket->files_tail->next = node;
 		return;
 	}
 
-	while (true) {
-		if (memcmp(hash, current_bucket->original_hash, HASH_DIGEST_SZ) == 0) {
-			break;
-		}
-		if (current_bucket->next == NULL) {
-			current_bucket = current_bucket->next = malloc(sizeof(hashmap_entry));
-			memcpy(current_bucket->original_hash, hash, HASH_DIGEST_SZ);
-			current_bucket->files = current_bucket->files_tail = node;
-			current_bucket->next = NULL;
-			return;
-		}
-
-		current_bucket = current_bucket->next;
-	}
-
-	current_bucket->files_tail = current_bucket->files_tail->next = node;
+	// No same hash found, create new hashmap_entry
+	current_bucket = *current_bucket_ptr = malloc(sizeof(hashmap_entry));
+	memcpy(current_bucket->original_hash, hash, HASH_DIGEST_SZ);
+	current_bucket->files = current_bucket->files_tail = node;
+	current_bucket->next = NULL;
 }
 
 void hashmap_free(duplicates_hashmap* map) {
