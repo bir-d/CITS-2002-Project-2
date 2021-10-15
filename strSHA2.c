@@ -2,7 +2,7 @@
     CITS2002 students - this file provides an implementation of the
     function with this protoype:
 
-	extern	char *strSHA2(char *filename);
+	extern int SHA2(const char *filename, unsigned char *output_digest);
 
     There is no need for you to modify or understand the implementation
     of this function.  Simply compile this file and call the function

@@ -9,7 +9,7 @@
 #include "hashmap.h"
 #include "file_recurse.h"
 
-extern int SHA2(const char *filename, unsigned char *output_digest); 
+extern int SHA2(const char *filename, unsigned char *output_digest);
 
 typedef struct search_by_hash_or_filename_state_t {
 	const unsigned char* target_digest;

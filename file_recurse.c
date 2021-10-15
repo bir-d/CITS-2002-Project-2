@@ -29,8 +29,8 @@ bool is_readable(const char* path) {
 
 typedef void (*file_handler)(const char* filepath, void* parameters);
 
-void recurse_directory(const char* basepath, bool ignore_dotfiles, file_handler callback_func, void* parameters) {
-	DIR* directory = opendir(basepath);	
+void recurse_directory(const char* dir_path, bool ignore_dotfiles, file_handler callback_func, void* parameters) {
+	DIR* directory = opendir(dir_path);	
 	if (directory == NULL) {
 		// We have validated specified directories, passed in the command-line,
 		// we can ignore descendants we don't have access to for robustness.
@@ -48,9 +48,9 @@ void recurse_directory(const char* basepath, bool ignore_dotfiles, file_handler 
 			continue;
 		}
 
-		size_t full_path_len = strlen(basepath) + 1 + strlen(name);
+		size_t full_path_len = strlen(dir_path) + 1 + strlen(name);
 		char* full_path = malloc(full_path_len + 1);
-		snprintf(full_path, full_path_len + 1, "%s/%s", basepath, name);
+		snprintf(full_path, full_path_len + 1, "%s/%s", dir_path, name);
 
 		if (!is_readable(full_path)) {
 			free(full_path);
@@ -74,4 +74,8 @@ void recurse_directory(const char* basepath, bool ignore_dotfiles, file_handler 
 	closedir(directory);
 }
 
-
+void recurse_directories(char** dir_paths, unsigned int dir_paths_len, bool ignore_dotfiles, file_handler callback_func, void* parameters){
+	for (int i = 0; i < dir_paths_len; i++) {
+		recurse_directory(dir_paths[i], ignore_dotfiles, callback_func, parameters);
+	}
+}

@@ -23,20 +23,20 @@ void _search_by_hash_or_filename_callback(const char* filepath, search_state* pa
 	state->tail = next;
 }
 
-file_list* search_by_hash(const unsigned char* digest, bool ignore_dotfiles, char** directory_list, int directory_list_length) {
+file_list* search_by_hash(const unsigned char* digest, bool ignore_dotfiles, char** directories, int directories_length) {
 	search_state state = {
 		.target_digest = digest,
 		.target_filepath = NULL,
 		.head = NULL,
 		.tail = NULL
 	};
-	for (int i = 0; i < directory_list_length; i++) {
-		recurse_directory(directory_list[i], ignore_dotfiles, (file_handler)_search_by_hash_or_filename_callback, &state);
+	for (int i = 0; i < directories_length; i++) {
+		recurse_directory(directories[i], ignore_dotfiles, (file_handler)_search_by_hash_or_filename_callback, &state);
 	}
 	return state.head;
 }
 
-file_list* search_by_filename(const char* filename, bool ignore_dotfiles, char** directory_list, int directory_list_length) {
+file_list* search_by_filename(const char* filename, bool ignore_dotfiles, char** directories, int directories_length) {
 	unsigned char* digest = malloc(HASH_DIGEST_SZ);
 	
 	if (SHA2(filename, digest)) {
@@ -50,9 +50,7 @@ file_list* search_by_filename(const char* filename, bool ignore_dotfiles, char**
 		.head = NULL,
 		.tail = NULL
 	};
-	for (int i = 0; i < directory_list_length; i++) {
-		recurse_directory(directory_list[i], ignore_dotfiles, (file_handler)_search_by_hash_or_filename_callback, &state);
-	}
+	recurse_directories(directories, directories_length, ignore_dotfiles, (file_handler)_search_by_hash_or_filename_callback, &state);
 
 	free(digest);
 	return state.head;
@@ -71,9 +69,7 @@ void _search_all_callback(const char* filename, duplicates_hashmap* map) {
 	free(digest);
 }
 
-void search_all(duplicates_hashmap* output, bool ignore_dotfiles, char** directory_list, int directory_list_length) {
-	for (int i = 0; i < directory_list_length; i++) {
-		recurse_directory(directory_list[i], ignore_dotfiles, (file_handler)_search_all_callback, output);
-	}
+void search_all(duplicates_hashmap* output, bool ignore_dotfiles, char** directories, int directories_length) {
+	recurse_directories(directories, directories_length, ignore_dotfiles, (file_handler)_search_all_callback, output);
 }
 

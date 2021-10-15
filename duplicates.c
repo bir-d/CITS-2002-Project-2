@@ -12,7 +12,6 @@
 #include "util.h"
 #include "list.h"
 #include "hashmap.h"
-#include "file_recurse.h"
 #include "search.h"
 
 extern char *optarg;
