@@ -15,6 +15,10 @@ void _search_by_hash_or_filename_callback(const char* filepath, search_state* pa
 
 	file_list* next = file_list_construct_from_file(filepath);
 
+	if (next == NULL) {
+		return;
+	}
+
 	if (state->head == NULL) {
 		state->head = next;
 	} else {
@@ -40,7 +44,7 @@ file_list* search_by_filename(const char* filename, bool ignore_dotfiles, char**
 	unsigned char* digest = malloc(HASH_DIGEST_SZ);
 	
 	if (SHA2(filename, digest)) {
-		fprintf(stderr, "Cannot open specified filename\n");
+		fprintf(stderr, "Cannot open %s\n", filename);
 		exit(EXIT_FAILURE);
 	}
 	
@@ -60,12 +64,14 @@ void _search_all_callback(const char* filename, duplicates_hashmap* map) {
 	unsigned char* digest = malloc(HASH_DIGEST_SZ);
 	
 	if (SHA2(filename, digest)) {
-		fprintf(stderr, "Cannot open specified filename\n");
-		exit(EXIT_FAILURE);
+		fprintf(stderr, "Cannot open %s\n", filename);
 	}
 
 	file_list* node = file_list_construct_from_file(filename);
-	hashmap_insert(map, digest, node);
+	if (node != NULL) {
+		hashmap_insert(map, digest, node);
+	}
+
 	free(digest);
 }
 

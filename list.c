@@ -11,7 +11,11 @@ file_list* file_list_construct_from_file(const char* filepath) {
 	file_list* node = malloc(sizeof(file_list));
 
 	struct stat file_stat;
-	stat(filepath, &file_stat);
+	if (stat(filepath, &file_stat) == -1) {
+		free(node);
+		fprintf(stderr, "Cannot stat %s\n", filepath);
+		return NULL;
+	}
 	node->path = strdup(filepath);
 	node->inode_number = file_stat.st_ino;
 	node->size = file_stat.st_size;
