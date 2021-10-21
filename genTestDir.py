@@ -21,7 +21,7 @@ def main():
         print("Usage: ./genTestDir.py <path>")
         exit()
 
-    datas = ["a", "b", "c", "d", "e", "f"]
+    datas = ["a", "b", "c", "d", "e", "f", "aa"]
 
     # take path from args
     path = sys.argv[1]

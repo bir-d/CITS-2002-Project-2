@@ -118,7 +118,7 @@ int main(int argc, char* argv[]) {
 	}
 
 	duplicates_hashmap map;
-	hashmap_init(&map, 1024); // A "reasonable" number to work with.
+	hashmap_init(&map, HASHMAP_INIT_SZ);
 	search_all(&map, ignore_dotfiles, directory_list, directory_list_length);
 	
 	if (quiet) {
@@ -160,7 +160,7 @@ int main(int argc, char* argv[]) {
 				file_list* current_file = current_bucket->files;
 				while (current_file != NULL) {
 					no_files++;
-					if (advanced) {
+					if (advanced) { // Ensure that we're counting by inode, not files
 						file_list* other_file = current_bucket->files;
 						bool is_hard_link = false;
 						while (other_file != current_file) {
