@@ -5,10 +5,12 @@ void _search_by_hash_or_filename_callback(const char* filepath, search_state* pa
 	unsigned char file_digest[HASH_DIGEST_SZ];
 	SHA2(filepath, file_digest);
 
+	// Is it the file we're looking for?
 	if (memcmp(file_digest, state->target_digest, HASH_DIGEST_SZ) != 0) {
 		return;
 	}
 
+	// Is it the file we we specified by name?
 	if (state->target_filepath != NULL && strcmp(filepath, state->target_filepath) == 0) {
 		return;
 	}
@@ -19,6 +21,7 @@ void _search_by_hash_or_filename_callback(const char* filepath, search_state* pa
 		return;
 	}
 
+	// Append to list
 	if (state->head == NULL) {
 		state->head = next;
 	} else {

@@ -28,7 +28,14 @@ typedef struct duplicates_hashmap_t {
 //     ]
 // }
 
+// Initialise a hashmap with a specified number of buckets
 void hashmap_init(duplicates_hashmap* hashmap, int length);
+
+// Derive an index into a given hashmap from the raw hash digest.
 unsigned int _hashmap_index_from_hash(duplicates_hashmap* map, unsigned char* hash);
+
+// Insert a file_list node "value" into a hashmap using the hash as the "key"
 void hashmap_insert(duplicates_hashmap* map, unsigned char* hash, file_list* node);
+
+// Free a hashmap
 void hashmap_free(duplicates_hashmap* map);

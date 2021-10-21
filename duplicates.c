@@ -18,6 +18,7 @@ extern char *optarg;
 extern int optind, opterr, optopt;
 
 int main(int argc, char* argv[]) {
+	// Initalize and parse user-specified switches
 	bool print_stats = true;
 	bool ignore_dotfiles = true;
 	bool advanced = false;

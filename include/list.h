@@ -12,7 +12,14 @@ typedef struct file_list_node_t {
 	size_t size;
 } file_list;
 
+// From a filepath, construct a list node for file_list
 file_list* file_list_construct_from_file(const char* filepath);
+
+// Print each element of a given file_list, seperated by a specified string
 void file_list_print(file_list* head, const char* separator);
+
+// Simplify duplicate files by deleting other files and hard-linking back to the original
 void file_list_deduplicate(file_list* head);
+
+// Free a file list
 void file_list_free(file_list* head);
