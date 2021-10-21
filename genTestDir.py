@@ -12,9 +12,8 @@ def generateFiles(datas):
         count = random.randrange(1, 3)
         for i in range(count):
             filelist[data] += 1 # increment count for this data
-            f = open(data + str(i), "w")
-            f.write(data)
-            f.close
+            with open(data + str(i), "w") as f:
+                f.write(data)
     return filelist
 
 def main():
