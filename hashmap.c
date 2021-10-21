@@ -22,6 +22,9 @@ unsigned int _hashmap_index_from_hash(duplicates_hashmap* map, unsigned char* ha
 void hashmap_insert(duplicates_hashmap* map, unsigned char* hash, file_list* node) {
 	unsigned int index = _hashmap_index_from_hash(map, hash);
 
+	// A pointer to a pointer to a bucket,
+	// so that we can just overwrite the actual pointer to the bucket
+	// instead of tracking by current_bucket->next
 	hashmap_entry** current_bucket_ptr = &map->buckets[index];
 	while (*current_bucket_ptr != NULL) {
 		if (memcmp(hash, (*current_bucket_ptr)->original_hash, HASH_DIGEST_SZ) == 0) {

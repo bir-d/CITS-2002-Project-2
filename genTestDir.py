@@ -15,7 +15,7 @@ def generateFiles(datas):
             f = open(data + str(i), "w")
             f.write(data)
             f.close
-    print(filelist)
+    return filelist
 
 def main():
     if len(sys.argv) != 2:
@@ -28,7 +28,14 @@ def main():
     path = sys.argv[1]
     os.chdir(path)
 
-    generateFiles(datas)
+    filelist = generateFiles(datas)
+    print(filelist)
+    print("Expected")
+    print(sum(filelist.values()))
+    print(sum(len(data) * count for data, count in filelist.items()))
+    print(len(filelist))
+    print(sum(len(data) for data in filelist.keys()))
+    print()
 
     exit()
     
