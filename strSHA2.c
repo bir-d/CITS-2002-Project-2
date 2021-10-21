@@ -300,7 +300,7 @@ extern	char	*strdup(const char *s);
 #define	SHA2_DIGEST_LEN_BYTES		32
 #define	SHA2_DIGEST_LEN_STR		64
 
-// Modify function to return status and output into a parameter pointer,
+// Modify function to return status and output into a parameter pointer;
 // we do not need the hex string.
 int SHA2(const char *filename, unsigned char *output_digest)
 {

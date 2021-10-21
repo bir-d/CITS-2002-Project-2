@@ -7,8 +7,6 @@
 #include <dirent.h>
 #include <sys/stat.h>
 
-extern int SHA2(const char *filename, unsigned char *output_digest); 
-
 file_type get_file_type(const char* path) {
 	struct stat file_stat;
 	stat(path, &file_stat);
@@ -29,6 +27,12 @@ bool is_readable(const char* path) {
 
 typedef void (*file_handler)(const char* filepath, void* parameters);
 
+// callback_func processes a file with user-defined parameters;
+// the parameters is opaque and does not need to be considered
+// by this DFS algorithm, and hence it is a void pointer,
+// potentially pointing to any type, such as a hashmap, etc.
+// It is up to the implementation of callback_func to handle it.
+// See search.c
 void recurse_directory(const char* dir_path, bool ignore_dotfiles, file_handler callback_func, void* parameters) {
 	DIR* directory = opendir(dir_path);	
 	if (directory == NULL) {
