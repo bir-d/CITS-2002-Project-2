@@ -9,10 +9,10 @@ OBJS := $(patsubst ./%.c,$(OBJ_DIR)/%.o,$(SRCS))
 
 $(OBJ_DIR)/%.o: %.c
 	mkdir -p $(OBJ_DIR)
-	$(CC) -c -o $@ $< $(CCFLAGS)
+	$(CC) $(CCFLAGS) -c -o $@ $< 
 
 duplicates: $(OBJS)
-	$(CC) -o $@ $^ $(CCFLAGS)
+	$(CC) $(CCFLAGS) -o $@ $^
 
 debug: CCFLAGS += -g -DDEBUG
 debug: duplicates
